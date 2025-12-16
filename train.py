@@ -129,8 +129,7 @@ def main(args):
         os.makedirs(args.results_dir, exist_ok=True)  # Make results folder (holds all experiment subfolders)
         experiment_index = len(glob(f"{args.results_dir}/*"))
         model_string_name = args.model.replace("/", "-")  # e.g., SiT-XL/2 --> SiT-XL-2 (for naming folders)
-        experiment_name = f"{experiment_index:03d}-{model_string_name}-" \
-                        f"{args.path_type}-{args.prediction}-{args.loss_weight}"
+        experiment_name = f"{experiment_index:03d}-{model_string_name}" 
         experiment_dir = f"{args.results_dir}/{experiment_name}"  # Create an experiment folder
         checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -158,11 +157,17 @@ def main(args):
 
 
     if args.ckpt is not None:
-        ckpt_path = args.ckpt
-        state_dict = find_model(ckpt_path)
-        model.load_state_dict(state_dict["model"])
-        ema.load_state_dict(state_dict["ema"])
-        args = state_dict["args"]
+        try:
+            ckpt_path = args.ckpt
+            state_dict = find_model(ckpt_path)
+            model.load_state_dict(state_dict["model"])
+            ema.load_state_dict(state_dict["ema"])
+            args = state_dict["args"]
+        except:
+            ckpt_path = args.ckpt
+            state_dict = find_model(ckpt_path)
+            model.load_state_dict(state_dict)
+            ema.load_state_dict(state_dict)
 
     requires_grad(ema, False)
     
@@ -171,7 +176,10 @@ def main(args):
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
     opt = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0)
     if args.ckpt is not None:
-        opt.load_state_dict(state_dict["opt"])
+        try:
+            opt.load_state_dict(state_dict["opt"])
+        except:
+            print("Potentially loading from a pretrained checkpoint from original SiT, ignore optimizer loading. This is not a bug")
 
     sampler = Sampler()
     vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
@@ -333,10 +341,10 @@ if __name__ == "__main__":
     parser.add_argument("--results-dir", type=str, default="results")
     parser.add_argument("--model", type=str, choices=list(SiT_models.keys()), default="SiT-XL/2")
     parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
-    parser.add_argument("--class_conditioning", action="store_true")
+    parser.add_argument("--class_conditioning", action="store_true") # To use class conditioning or not
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--epochs", type=int, default=1400)
-    parser.add_argument("--global-batch-size", type=int, default=256)
+    parser.add_argument("--global-batch-size", type=int, default=256) # Total batch size for all GPUs
     parser.add_argument("--global-seed", type=int, default=0)
     parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="ema")  # Choice doesn't affect training
     parser.add_argument("--num-workers", type=int, default=4)
@@ -344,8 +352,8 @@ if __name__ == "__main__":
     parser.add_argument("--ckpt-every", type=int, default=5000)
     parser.add_argument("--sample-every", type=int, default=5000)
     parser.add_argument("--cfg-scale", type=float, default=4.0)
-    parser.add_argument("--sample", action="store_true")
-    parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--sample", action="store_true") # To do sampling during training or not
+    parser.add_argument("--wandb", action="store_true") # To use wandb or not
     parser.add_argument("--ckpt", type=str, default=None,
                         help="Optional path to a custom SiT checkpoint")
 
